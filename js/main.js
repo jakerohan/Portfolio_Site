@@ -1,6 +1,7 @@
 // ===== Configuration =====
 const CONFIG = {
     imagePath: 'images/',
+    thumbPath: 'images/thumbs/',
     intersectionThreshold: 0.1,
     parallaxStrength: 0.08
 };
@@ -61,7 +62,8 @@ async function loadImageList() {
 
     state.images = shuffledImages.map((filename, index) => ({
         filename,
-        path: CONFIG.imagePath + filename,
+        thumb: CONFIG.thumbPath + filename,
+        full: CONFIG.imagePath + filename,
         alt: generateAltText(filename),
         index
     }));
@@ -94,9 +96,9 @@ function renderGallery(images) {
         galleryItem.classList.add(animationClass);
         galleryItem.dataset.index = index;
 
-        // Create image element with lazy loading
+        // Create image element with lazy loading (use thumbnail for gallery)
         const img = document.createElement('img');
-        img.dataset.src = image.path;
+        img.dataset.src = image.thumb;
         img.alt = image.alt;
         img.loading = 'lazy';
 
@@ -228,7 +230,7 @@ function openLightbox(index) {
     const lightboxCaption = document.getElementById('lightboxCaption');
 
     const currentImage = state.images[index];
-    lightboxImage.src = currentImage.path;
+    lightboxImage.src = currentImage.full;
     lightboxCaption.textContent = currentImage.alt;
 
     lightbox.classList.add('active');
@@ -257,7 +259,7 @@ function navigateLightbox(direction) {
 
     lightboxImage.style.opacity = '0';
     setTimeout(() => {
-        lightboxImage.src = currentImage.path;
+        lightboxImage.src = currentImage.full;
         lightboxCaption.textContent = currentImage.alt;
         lightboxImage.style.opacity = '1';
     }, 150);
