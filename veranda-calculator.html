@@ -135,7 +135,7 @@ display:block; width:100%; height:auto; max-height:38vh; border-radius:6px; obje
 <div class="postcode-row">
 <label for="postcode">Postcode</label>
 <input id="postcode" class="postcode-input" type="text" inputmode="numeric" pattern="[0-9]*"
-maxlength="4" placeholder="5000" autocomplete="postal-code" aria-describedby="postcodeError" />
+maxlength="4" placeholder="" autocomplete="postal-code" aria-describedby="postcodeError" />
 <span id="postcodeError" class="postcode-error" role="alert" aria-live="polite">
 Unknown area – pricing uses "Unknown area"
 </span>
@@ -178,11 +178,11 @@ Unknown area – pricing uses "Unknown area"
 <!-- Estimate -->
 <div class="vp-estimate" aria-live="polite">
 <div class="vp-estimate-title">Your Indicative Estimate</div>
-<div class="vp-estimate-value">
+<div class="vp-estimate-value" id="estimateValue">
 $<span id="minPrice">0</span> – $<span id="maxPrice">0</span>
 </div>
 <div class="vp-estimate-sub" id="estimateSub">
-Enter your postcode and measurements to see an indicative veranda / patio price.
+Please enter your postcode above for a price estimate
 </div>
 <div class="vp-estimate-meta">
 <span class="label">Roof:</span> <span id="metaRoof">–</span>
@@ -503,15 +503,14 @@ rate = priceTable[city][frameType][roofStyle];
 }
 
 if(!rate || area===0){
-document.getElementById('minPrice').textContent = "0";
-document.getElementById('maxPrice').textContent = "0";
+document.getElementById('estimateValue').innerHTML = "Please enter a postcode above to view your estimate";
 document.getElementById('estimateSub').textContent =
-"Enter your postcode and veranda size to see an indicative price for a high quality attached veranda / patio roof.";
+"Please enter your postcode above for a price estimate";
 } else {
 const min = area * rate.min;
 const max = area * rate.max;
-document.getElementById('minPrice').textContent = formatMoney(min);
-document.getElementById('maxPrice').textContent = formatMoney(max);
+document.getElementById('estimateValue').innerHTML =
+`$<span id="minPrice">${formatMoney(min)}</span> – $<span id="maxPrice">${formatMoney(max)}</span>`;
 document.getElementById('estimateSub').textContent =
 `For a high quality attached veranda / patio roof installed in ${city}.`;
 }
