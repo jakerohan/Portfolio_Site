@@ -61,6 +61,16 @@ Unknown area – pricing uses "Unknown area"
 <option value="gable">Gable</option>
 </select>
 </div>
+
+<label for="attachSide" class="vp-label">Attached to house</label>
+<div class="vp-input-wrap">
+<select id="attachSide" class="vp-select">
+<option value="back">Back wall (eave)</option>
+<option value="left">Left wall</option>
+<option value="right">Right wall</option>
+<option value="none">Freestanding</option>
+</select>
+</div>
 </div>
 </div>
 
@@ -82,24 +92,8 @@ Please enter your postcode above for a price estimate
 </div>
 </div>
 
-<!-- Plan + Illustration -->
+<!-- Drawing -->
 <div class="vp-layout">
-<div class="vp-image-box">
-<!-- REAL IMG tags (now present) + auto inline-SVG fallback if the JPG can't load -->
-<div id="flatWrap" class="roof-illustration">
-<img id="flatImg" src="images/flat-roof.jpg" alt="Flat roof veranda illustration" loading="lazy" decoding="async" />
-</div>
-<div id="gableWrap" class="roof-illustration" hidden>
-<img id="gableImg" src="images/gable-roof.jpg" alt="Gable roof veranda illustration" loading="lazy" decoding="async" />
-</div>
-<div id="flatSVG" class="roof-illustration" hidden></div>
-<div id="gableSVG" class="roof-illustration" hidden></div>
-
-<div id="roofCaption">
-Indicative illustration of a flat veranda roof. Final design and detailing will be confirmed with your site‑specific plans.
-</div>
-</div>
-
 <div class="vp-plan-wrapper">
 <canvas id="planCanvas" class="vp-plan"></canvas>
 </div>
