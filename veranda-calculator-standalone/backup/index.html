@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Veranda & Patio Roof Price Estimator</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="format-detection" content="telephone=no" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="vp-container">
+<!-- Green header bar -->
+<div class="vp-header-bar">
+<h2>Veranda & Patio Price Estimator</h2>
+</div>
+
+<!-- Header -->
+<div class="vp-heading">
+<div class="vp-title"><h1>Enter Your Details</h1></div>
+<div class="postcode-row">
+<label for="postcode">Postcode</label>
+<input id="postcode" class="postcode-input" type="text" inputmode="numeric" pattern="[0-9]*"
+maxlength="4" placeholder="" autocomplete="postal-code" aria-describedby="postcodeError" />
+<span id="postcodeError" class="postcode-error" role="alert" aria-live="polite">
+Unknown area – pricing uses "Unknown area"
+</span>
+</div>
+</div>
+
+<!-- Inputs -->
+<div class="vp-form">
+<div class="vp-grid" role="group" aria-label="Estimator inputs">
+<label for="vWidth" class="vp-label">Width (along house)</label>
+<div class="vp-input-wrap">
+<input id="vWidth" class="vp-input metre" type="number" inputmode="decimal" step="0.1" min="0" max="50" value="8" />
+<span class="vp-unit">m</span>
+</div>
+
+<label for="vDepth" class="vp-label">Projection (out from house)</label>
+<div class="vp-input-wrap">
+<input id="vDepth" class="vp-input metre" type="number" inputmode="decimal" step="0.1" min="0" max="20" value="4" />
+<span class="vp-unit">m</span>
+</div>
+
+<label for="frameType" class="vp-label">Frame</label>
+<div class="vp-input-wrap">
+<select id="frameType" class="vp-select">
+<option value="timber">Timber</option>
+<option value="steel">Colorbond steel</option>
+</select>
+</div>
+
+<label for="roofStyle" class="vp-label">Roof</label>
+<div class="vp-input-wrap">
+<select id="roofStyle" class="vp-select">
+<option value="flat">Flat</option>
+<option value="gable">Gable</option>
+</select>
+</div>
+</div>
+</div>
+
+<!-- Estimate -->
+<div class="vp-estimate" aria-live="polite">
+<div class="vp-estimate-title">Your Indicative Estimate</div>
+<div class="vp-estimate-value" id="estimateValue">
+$<span id="minPrice">0</span> – $<span id="maxPrice">0</span>
+</div>
+<div class="vp-estimate-sub" id="estimateSub">
+Please enter your postcode above for a price estimate
+</div>
+<div class="vp-estimate-meta">
+<span class="label">Roof:</span> <span id="metaRoof">–</span>
+&nbsp;|&nbsp;
+<span class="label">Material:</span> <span id="metaFrame">–</span>
+&nbsp;|&nbsp;
+<span class="label">Location:</span> <span id="metaLocation">–</span>
+</div>
+</div>
+
+<!-- Plan + Illustration -->
+<div class="vp-layout">
+<div class="vp-image-box">
+<!-- REAL IMG tags (now present) + auto inline-SVG fallback if the JPG can't load -->
+<div id="flatWrap" class="roof-illustration">
+<img id="flatImg" src="images/flat-roof.jpg" alt="Flat roof veranda illustration" loading="lazy" decoding="async" />
+</div>
+<div id="gableWrap" class="roof-illustration" hidden>
+<img id="gableImg" src="images/gable-roof.jpg" alt="Gable roof veranda illustration" loading="lazy" decoding="async" />
+</div>
+<div id="flatSVG" class="roof-illustration" hidden></div>
+<div id="gableSVG" class="roof-illustration" hidden></div>
+
+<div id="roofCaption">
+Indicative illustration of a flat veranda roof. Final design and detailing will be confirmed with your site‑specific plans.
+</div>
+</div>
+
+<div class="vp-plan-wrapper">
+<canvas id="planCanvas" class="vp-plan"></canvas>
+</div>
+</div>
+</div>
+
+<script src="script.js"></script>
+
+</body>
+</html>
