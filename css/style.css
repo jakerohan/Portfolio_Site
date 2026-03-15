@@ -224,6 +224,8 @@ img {
     align-items: flex-start;
     gap: 4vw;
     min-height: 50vh;
+    flex-wrap: wrap;
+    justify-content: center;
 }
 
 /* Editorial images — base */
@@ -255,15 +257,19 @@ img {
 }
 
 /* ===== Format-based image classes (applied by JS from filename suffix) ===== */
+/* aspect-ratio ensures the container shape always matches the format,
+   regardless of flex layout context */
 
-/* _wide — standard landscape, used in scattered rows */
+/* _wide — standard landscape (3:2) */
 .fmt-wide {
     height: 55vh;
+    aspect-ratio: 3 / 2;
 }
 
-/* _tall — portrait orientation */
+/* _tall — portrait orientation (2:3) */
 .fmt-tall {
     height: 70vh;
+    aspect-ratio: 2 / 3;
 }
 
 /* _square — 1:1 aspect */
@@ -501,11 +507,23 @@ img {
         min-height: auto;
     }
 
-    .fmt-wide,
-    .fmt-tall,
+    .fmt-wide {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 3 / 2;
+    }
+
+    .fmt-tall {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 2 / 3;
+        max-height: 70vh;
+    }
+
     .fmt-square {
         width: 100%;
-        height: 50vh;
+        height: auto;
+        aspect-ratio: 1 / 1;
     }
 
     .editorial-image--offset-down,
