@@ -222,10 +222,8 @@ img {
 .editorial-row--scattered {
     display: flex;
     align-items: flex-start;
-    gap: 4vw;
-    min-height: 50vh;
-    flex-wrap: wrap;
     justify-content: center;
+    gap: 4vw;
 }
 
 /* Editorial images — base */
@@ -233,12 +231,12 @@ img {
     position: relative;
     overflow: hidden;
     will-change: transform, opacity;
+    flex-shrink: 0;
+    width: fit-content;
 }
 
 .editorial-image img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+    display: block;
     transition: transform 0.6s cubic-bezier(0.33, 0, 0, 1);
 }
 
@@ -257,37 +255,39 @@ img {
 }
 
 /* ===== Format-based image classes (applied by JS from filename suffix) ===== */
-/* aspect-ratio ensures the container shape always matches the format,
-   regardless of flex layout context */
+/* The image defines the container shape. max-width:100% from the global
+   img rule is overridden here so height drives width correctly. */
 
-/* _wide — standard landscape (3:2) */
-.fmt-wide {
+/* _wide — standard landscape */
+.fmt-wide img {
     height: 55vh;
-    aspect-ratio: 3 / 2;
+    width: auto;
+    max-width: none;
 }
 
-/* _tall — portrait orientation (2:3) */
-.fmt-tall {
+/* _tall — portrait orientation */
+.fmt-tall img {
     height: 70vh;
-    aspect-ratio: 2 / 3;
+    width: auto;
+    max-width: none;
 }
 
 /* _square — 1:1 aspect */
-.fmt-square {
+.fmt-square img {
     height: 50vh;
-    aspect-ratio: 1 / 1;
+    width: auto;
+    max-width: none;
 }
 
-/* _ultrawide — panoramic, always gets its own full-width row */
+/* _ultrawide — panoramic, full width */
 .fmt-ultrawide {
     width: 100%;
-    height: auto;
 }
 
 .fmt-ultrawide img {
     width: 100%;
     height: auto;
-    object-fit: contain;
+    max-width: 100%;
 }
 
 /* Position variants — still used for layout in scattered rows */
@@ -503,27 +503,22 @@ img {
 
     .editorial-row--scattered {
         flex-direction: column;
+        align-items: center;
         gap: 3rem;
-        min-height: auto;
     }
 
-    .fmt-wide {
-        width: 100%;
-        height: auto;
-        aspect-ratio: 3 / 2;
-    }
-
-    .fmt-tall {
-        width: 100%;
-        height: auto;
-        aspect-ratio: 2 / 3;
+    .fmt-wide img,
+    .fmt-tall img,
+    .fmt-square img {
+        max-width: 90vw;
         max-height: 70vh;
+        height: auto;
+        width: auto;
     }
 
-    .fmt-square {
-        width: 100%;
-        height: auto;
-        aspect-ratio: 1 / 1;
+    .editorial-image {
+        width: auto;
+        flex-shrink: 1;
     }
 
     .editorial-image--offset-down,
