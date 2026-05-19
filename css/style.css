@@ -542,3 +542,19 @@ img {
         height: 60vh;
     }
 }
+
+/* ===== Lazy-load placeholders =====
+   Reserve aspect ratio so the page doesn't reflow when images stream in.
+   Order matters: default first, then format-class overrides win by source order. */
+.horizontal-image img {
+    aspect-ratio: 3 / 2; /* fallback for unformatted filenames (e.g. Mori series) */
+}
+.fmt-wide img { aspect-ratio: 3 / 2; }
+.fmt-tall img { aspect-ratio: 2 / 3; }
+.fmt-square img { aspect-ratio: 1 / 1; }
+.fmt-ultrawide img { aspect-ratio: 21 / 9; }
+
+/* Dark placeholder shown while a lazy image hasn't loaded its src yet */
+img[data-src] {
+    background-color: #1a1a1a;
+}

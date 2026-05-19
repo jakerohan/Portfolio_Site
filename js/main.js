@@ -23,7 +23,8 @@ function applyFormatClasses() {
     const formatPattern = /_(wide|tall|square|ultrawide)\./i;
 
     document.querySelectorAll('.editorial-image img, .horizontal-image img').forEach((img) => {
-        const src = img.getAttribute('src') || '';
+        // Read from data-src for lazy images, falling back to src for eager ones
+        const src = img.getAttribute('data-src') || img.getAttribute('src') || '';
         const match = src.match(formatPattern);
         const figure = img.closest('.editorial-image') || img.closest('.horizontal-image');
 
@@ -32,6 +33,51 @@ function applyFormatClasses() {
             figure.classList.add(`fmt-${format}`);
         }
     });
+}
+
+// ===== Lazy-load images section by section =====
+// Watches each <section> containing lazy images. When a section comes within
+// one viewport-height of being visible, swap data-src → src on all its images
+// at once — that way horizontal galleries get their full row preloaded for
+// smooth horizontal scrolling, rather than images popping in one-by-one.
+function initLazyLoad() {
+    const lazyImages = document.querySelectorAll('img[data-src]');
+    if (lazyImages.length === 0) return;
+
+    // Group images by their parent <section> so we can observe sections, not individual images
+    const sectionsWithLazy = new Set();
+    lazyImages.forEach((img) => {
+        const section = img.closest('section');
+        if (section) sectionsWithLazy.add(section);
+    });
+
+    // Swap data-src to src on every lazy image inside the given section
+    const loadSection = (section) => {
+        const imgs = section.querySelectorAll('img[data-src]');
+        imgs.forEach((img) => {
+            img.setAttribute('src', img.getAttribute('data-src'));
+            img.removeAttribute('data-src');
+            // Refresh ScrollTrigger once each image's natural width is known —
+            // horizontal section scrollWidth depends on it
+            img.addEventListener('load', () => {
+                if (window.ScrollTrigger) ScrollTrigger.refresh();
+            }, { once: true });
+        });
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+                loadSection(entry.target);
+                observer.unobserve(entry.target);
+            }
+        });
+    }, {
+        rootMargin: '100% 0px', // Start loading 1 viewport ahead of scroll position
+        threshold: 0,
+    });
+
+    sectionsWithLazy.forEach((section) => observer.observe(section));
 }
 
 // ===== Hero parallax on scroll =====
@@ -281,6 +327,9 @@ function initSmoothAnchors() {
 function init() {
     // Apply format classes first so CSS sizing is correct before layout
     applyFormatClasses();
+
+    // Set up lazy loading before other features so the observer is ready
+    initLazyLoad();
 
     // Init non-scroll-dependent features immediately
     initHeroParallax();
