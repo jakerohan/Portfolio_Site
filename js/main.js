@@ -1,356 +1,402 @@
-// ===== Smooth scroll with Lenis =====
-const lenis = new Lenis({
-    duration: 1.2,
-    easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-    smoothWheel: true,
-});
-
-// Connect Lenis to GSAP ScrollTrigger so they stay in sync
-lenis.on('scroll', ScrollTrigger.update);
-
-gsap.ticker.add((time) => {
-    lenis.raf(time * 1000);
-});
-gsap.ticker.lagSmoothing(0);
-
-// ===== Register GSAP plugins =====
 gsap.registerPlugin(ScrollTrigger);
 
-// ===== Auto-detect image format from filename suffix =====
-// Reads _wide, _tall, _square, _ultrawide from the filename and applies
-// the matching CSS class (fmt-wide, fmt-tall, fmt-square, fmt-ultrawide)
-function applyFormatClasses() {
-    const formatPattern = /_(wide|tall|square|ultrawide)\./i;
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    document.querySelectorAll('.editorial-image img, .horizontal-image img').forEach((img) => {
-        // Read from data-src for lazy images, falling back to src for eager ones
-        const src = img.getAttribute('data-src') || img.getAttribute('src') || '';
-        const match = src.match(formatPattern);
-        const figure = img.closest('.editorial-image') || img.closest('.horizontal-image');
-
-        if (match && figure) {
-            const format = match[1].toLowerCase();
-            figure.classList.add(`fmt-${format}`);
-        }
-    });
+// ===== Smooth scroll — skipped entirely under reduced motion =====
+let lenis = null;
+if (!prefersReducedMotion) {
+    lenis = new Lenis({ duration: 1.0, smoothWheel: true });
+    lenis.on('scroll', ScrollTrigger.update);
+    gsap.ticker.add((time) => lenis.raf(time * 1000));
+    gsap.ticker.lagSmoothing(0);
 }
 
-// ===== Lazy-load images section by section =====
-// Watches each <section> containing lazy images. When a section comes within
-// one viewport-height of being visible, swap data-src → src on all its images
-// at once — that way horizontal galleries get their full row preloaded for
-// smooth horizontal scrolling, rather than images popping in one-by-one.
-function initLazyLoad() {
-    const lazyImages = document.querySelectorAll('img[data-src]');
-    if (lazyImages.length === 0) return;
+// ===== Hero =====
+function initHero() {
+    if (prefersReducedMotion) return;
+    const heroImage = document.querySelector('.hero-bg img');
+    const heroTitle = document.querySelector('.hero-title');
+    const heroMeta = document.querySelector('.hero-meta');
 
-    // Group images by their parent <section> so we can observe sections, not individual images
-    const sectionsWithLazy = new Set();
-    lazyImages.forEach((img) => {
-        const section = img.closest('section');
-        if (section) sectionsWithLazy.add(section);
+    gsap.from(heroImage, { scale: 1.12, duration: 2.2, ease: 'power2.out' });
+    gsap.from([heroTitle, heroMeta], {
+        opacity: 0, y: 50, duration: 1.2, ease: 'power3.out', stagger: 0.15, delay: 0.3,
     });
-
-    // Swap data-src to src on every lazy image inside the given section
-    const loadSection = (section) => {
-        const imgs = section.querySelectorAll('img[data-src]');
-        imgs.forEach((img) => {
-            img.setAttribute('src', img.getAttribute('data-src'));
-            img.removeAttribute('data-src');
-            // Refresh ScrollTrigger once each image's natural width is known —
-            // horizontal section scrollWidth depends on it
-            img.addEventListener('load', () => {
-                if (window.ScrollTrigger) ScrollTrigger.refresh();
-            }, { once: true });
-        });
-    };
-
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach((entry) => {
-            if (entry.isIntersecting) {
-                loadSection(entry.target);
-                observer.unobserve(entry.target);
-            }
-        });
-    }, {
-        rootMargin: '100% 0px', // Start loading 1 viewport ahead of scroll position
-        threshold: 0,
-    });
-
-    sectionsWithLazy.forEach((section) => observer.observe(section));
-}
-
-// ===== Hero parallax on scroll =====
-function initHeroParallax() {
-    const heroLines = document.querySelectorAll('.hero-line');
-    const heroSubtitle = document.querySelector('.hero-subtitle');
-    const scrollIndicator = document.querySelector('.scroll-indicator');
-
-    // Parallax the hero text at different speeds as user scrolls away
-    heroLines.forEach((line) => {
-        const speed = parseFloat(line.dataset.speed) || 1;
-        gsap.to(line, {
-            yPercent: -50 * speed,
-            opacity: 0,
-            ease: 'none',
-            scrollTrigger: {
-                trigger: '.hero',
-                start: 'top top',
-                end: 'bottom top',
-                scrub: true,
-            },
-        });
-    });
-
-    // Fade out subtitle and scroll indicator
-    gsap.to([heroSubtitle, scrollIndicator], {
-        opacity: 0,
-        yPercent: -30,
+    gsap.to(heroImage, {
+        yPercent: 14,
         ease: 'none',
-        scrollTrigger: {
-            trigger: '.hero',
-            start: 'top top',
-            end: '40% top',
-            scrub: true,
-        },
+        scrollTrigger: { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: true },
     });
 }
 
-// ===== Scroll-scrubbed image reveals =====
-function initScrollReveals() {
-    const revealElements = document.querySelectorAll('[data-scroll-reveal]');
+// ===== Strips: hover-scoped wheel + mouse drag + progress + counter =====
+// Wheel behaviour: while the pointer is over a strip that can still
+// move in the wheel's direction, the wheel scrolls the strip sideways
+// (smoothed with a short tween). At either end the event is left alone,
+// so it bubbles up to Lenis and the page scrolls vertically — no trap.
+// Touch devices never hit this path: native overflow-x handles swiping.
+function initStrips() {
+    // Each wheel tick moves the strip 3x the scrolled distance —
+    // sideways travel is long, so 1:1 felt sluggish
+    const wheelSpeedMultiplier = 3;
 
-    revealElements.forEach((element) => {
+    document.querySelectorAll('[data-strip]').forEach((strip) => {
+        const stripFooter = strip.parentElement.querySelector('.strip-footer');
+        const progressBar = stripFooter.querySelector('.strip-progress-bar');
+        const counter = stripFooter.querySelector('[data-counter]');
+        const frameTotal = strip.querySelectorAll('figure').length;
+
+        // Proxy object lets GSAP smooth scrollLeft without a plugin
+        const scrollProxy = { value: strip.scrollLeft };
+        let targetScrollLeft = strip.scrollLeft;
+
+        const maxScrollLeft = () => strip.scrollWidth - strip.clientWidth;
+
+        const animateToTarget = () => {
+            if (prefersReducedMotion) {
+                strip.scrollLeft = targetScrollLeft;
+                scrollProxy.value = targetScrollLeft;
+                return;
+            }
+            gsap.to(scrollProxy, {
+                value: targetScrollLeft,
+                duration: 0.5,
+                ease: 'power2.out',
+                overwrite: true,
+                onUpdate: () => { strip.scrollLeft = scrollProxy.value; },
+            });
+        };
+
+        // --- Wheel capture with end pass-through ---
+        strip.addEventListener('wheel', (event) => {
+            const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+            const limit = maxScrollLeft();
+            const scrollingForward = delta > 0;
+            const atStart = targetScrollLeft <= 0 && !scrollingForward;
+            const atEnd = targetScrollLeft >= limit && scrollingForward;
+
+            // Nothing to scroll, or at an end going outward → let the page have it
+            if (limit <= 0 || atStart || atEnd) return;
+
+            event.preventDefault();
+            event.stopPropagation(); // keep it away from Lenis
+            targetScrollLeft = Math.min(limit, Math.max(0, targetScrollLeft + delta * wheelSpeedMultiplier));
+            animateToTarget();
+        }, { passive: false });
+
+        // --- Mouse drag (touch uses native overflow scrolling) ---
+        let pointerIsDown = false;
+        let dragStartX = 0;
+        let scrollStartLeft = 0;
+        let dragDistance = 0;
+
+        strip.addEventListener('pointerdown', (event) => {
+            if (event.pointerType !== 'mouse') return;
+            pointerIsDown = true;
+            dragStartX = event.clientX;
+            scrollStartLeft = strip.scrollLeft;
+            dragDistance = 0;
+            strip.classList.add('dragging');
+            gsap.killTweensOf(scrollProxy);
+        });
+        strip.addEventListener('pointermove', (event) => {
+            if (!pointerIsDown) return;
+            const delta = event.clientX - dragStartX;
+            dragDistance = Math.max(dragDistance, Math.abs(delta));
+            // Capture only once a real drag starts — capturing on pointerdown
+            // retargets the follow-up click away from the figure (broke the lightbox)
+            if (dragDistance > 6 && !strip.hasPointerCapture(event.pointerId)) {
+                strip.setPointerCapture(event.pointerId);
+            }
+            strip.scrollLeft = scrollStartLeft - delta;
+        });
+        const endDrag = () => {
+            if (!pointerIsDown) return;
+            pointerIsDown = false;
+            strip.classList.remove('dragging');
+            // Re-sync the wheel target with wherever the drag finished
+            targetScrollLeft = strip.scrollLeft;
+            scrollProxy.value = strip.scrollLeft;
+        };
+        strip.addEventListener('pointerup', endDrag);
+        strip.addEventListener('pointercancel', endDrag);
+
+        // Suppress the click that follows a real drag (lightbox guard)
+        strip.addEventListener('click', (event) => {
+            if (dragDistance > 6) { event.stopPropagation(); event.preventDefault(); }
+        }, true);
+
+        // Sync wheel target with native touch scrolling; drive progress + counter
+        strip.addEventListener('scroll', () => {
+            if (!pointerIsDown && !gsap.isTweening(scrollProxy)) {
+                targetScrollLeft = strip.scrollLeft;
+                scrollProxy.value = strip.scrollLeft;
+            }
+            const limit = maxScrollLeft();
+            if (limit <= 0) return;
+            const scrollFraction = strip.scrollLeft / limit;
+            if (progressBar) gsap.set(progressBar, { scaleX: scrollFraction });
+            if (counter) {
+                const currentFrame = Math.min(frameTotal, Math.round(scrollFraction * (frameTotal - 1)) + 1);
+                const pad = (n) => String(n).padStart(2, '0');
+                counter.innerHTML = `<b>${pad(currentFrame)}</b> / ${pad(frameTotal)}`;
+            }
+        }, { passive: true });
+    });
+}
+
+// ===== Collapsible sets =====
+function initCollapse() {
+    document.querySelectorAll('.cat').forEach((section) => {
+        const toggleButton = section.querySelector('[data-toggle]');
+        const body = section.querySelector('[data-body]');
+        if (!toggleButton || !body) return;
+
+        toggleButton.addEventListener('click', () => {
+            const collapsing = toggleButton.getAttribute('aria-expanded') === 'true';
+            toggleButton.setAttribute('aria-expanded', String(!collapsing));
+            toggleButton.textContent = collapsing ? 'Show' : 'Hide';
+
+            gsap.to(body, {
+                height: collapsing ? 0 : 'auto',
+                opacity: collapsing ? 0 : 1,
+                duration: prefersReducedMotion ? 0 : 0.6,
+                ease: 'power3.inOut',
+                // Page height changed — recalc scroll-linked animations
+                onComplete: () => ScrollTrigger.refresh(),
+            });
+        });
+    });
+}
+
+// ===== Reveals: play once, not scrubbed =====
+function initReveals() {
+    if (prefersReducedMotion) return; // CSS already forces these visible
+    document.querySelectorAll('[data-reveal]').forEach((element) => {
         gsap.to(element, {
             opacity: 1,
             y: 0,
-            scale: 1,
             duration: 1,
             ease: 'power3.out',
-            scrollTrigger: {
-                trigger: element,
-                start: 'top 85%',
-                end: 'top 40%',
-                scrub: 0.8,
-            },
+            scrollTrigger: { trigger: element, start: 'top 88%', once: true },
         });
     });
 }
 
-// ===== Section heading word animations =====
-function initHeadingAnimations() {
-    const headings = document.querySelectorAll('.section-heading');
-
-    headings.forEach((heading) => {
-        const words = heading.querySelectorAll('.heading-word');
-
-        words.forEach((word, wordIndex) => {
-            gsap.from(word, {
-                opacity: 0,
-                y: 60,
-                rotateX: -15,
-                duration: 1,
-                ease: 'power3.out',
-                scrollTrigger: {
-                    trigger: heading,
-                    start: 'top 80%',
-                    end: 'top 50%',
-                    scrub: 0.6,
-                },
-                delay: wordIndex * 0.1,
-            });
-        });
-    });
-}
-
-// ===== Horizontal scroll galleries (supports multiple) =====
-function initHorizontalScroll() {
-    const horizontalSections = document.querySelectorAll('.horizontal-section');
-
-    horizontalSections.forEach((section) => {
-        const trigger = section.querySelector('.horizontal-trigger');
-        const track = section.querySelector('.horizontal-track');
-        const heading = section.querySelector('.horizontal-heading');
-
-        if (!trigger || !track) return;
-
-        // Use functional values so dimensions are recalculated on refresh
-        const getScrollWidth = () => {
-            const totalTrackWidth = track.scrollWidth;
-            const headingWidth = heading ? heading.offsetWidth : 0;
-            return headingWidth + totalTrackWidth;
-        };
-
-        gsap.to(trigger, {
-            x: () => -(getScrollWidth() - window.innerWidth),
-            ease: 'none',
-            scrollTrigger: {
-                trigger: section,
-                start: 'top top',
-                end: () => `+=${getScrollWidth()}`,
-                scrub: 1,
-                pin: true,
-                pinSpacing: true,
-                anticipatePin: 1,
-                invalidateOnRefresh: true,
-            },
-        });
-    });
-
-    // Ensure all horizontal images are fully visible
-    const horizontalImages = document.querySelectorAll('.horizontal-image');
-    horizontalImages.forEach((image) => {
-        gsap.set(image, { opacity: 1, scale: 1, rotateY: 0 });
-    });
-}
-
-// ===== Cursor-responsive tilt =====
-function initCursorTilt() {
-    const tiltElements = document.querySelectorAll('.tilt-hover');
-    const maxRotation = 6; // degrees
-    const maxShift = 5; // pixels for subtle translate
-
-    tiltElements.forEach((element) => {
-        element.addEventListener('mousemove', (event) => {
-            const rect = element.getBoundingClientRect();
-            const elementCenterX = rect.left + rect.width / 2;
-            const elementCenterY = rect.top + rect.height / 2;
-
-            // Normalise mouse position relative to element center (-1 to 1)
-            const normalizedX = (event.clientX - elementCenterX) / (rect.width / 2);
-            const normalizedY = (event.clientY - elementCenterY) / (rect.height / 2);
-
-            // Rotate opposite to mouse direction for natural "looking at cursor" feel
-            const rotateY = normalizedX * maxRotation;
-            const rotateX = -normalizedY * maxRotation;
-            const translateX = normalizedX * maxShift;
-            const translateY = normalizedY * maxShift;
-
-            gsap.to(element, {
-                rotateX: rotateX,
-                rotateY: rotateY,
-                x: translateX,
-                y: translateY,
-                transformPerspective: 800,
-                duration: 0.4,
-                ease: 'power2.out',
-            });
-        });
-
-        element.addEventListener('mouseleave', () => {
-            gsap.to(element, {
-                rotateX: 0,
-                rotateY: 0,
-                x: 0,
-                y: 0,
-                duration: 0.7,
-                ease: 'elastic.out(1, 0.5)',
-            });
-        });
-    });
-}
-
-// ===== Image parallax within containers =====
-function initImageParallax() {
-    // Only apply to editorial section images, not horizontal gallery
-    const editorialImages = document.querySelectorAll('.editorial .editorial-image img');
-
-    editorialImages.forEach((img) => {
-        // Scale up slightly so parallax movement doesn't show edges
-        gsap.set(img, { scale: 1.15, transformOrigin: 'center center' });
-
-        gsap.to(img, {
-            yPercent: -10,
-            ease: 'none',
-            scrollTrigger: {
-                trigger: img.parentElement,
-                start: 'top bottom',
-                end: 'bottom top',
-                scrub: true,
-            },
-        });
-    });
-}
-
-// ===== Lightbox =====
+// ===== Lightbox: portal open, true aspect ratio, zoom + pan, arrows =====
 function initLightbox() {
     const lightbox = document.getElementById('lightbox');
-    const lightboxImg = document.getElementById('lightboxImg');
-    const lightboxClose = document.querySelector('.lightbox-close');
+    const stage = document.getElementById('lightboxStage');
+    const stageImg = document.getElementById('lightboxImg');
+    const counter = document.getElementById('lightboxCounter');
+    const prevButton = lightbox.querySelector('[data-lb-prev]');
+    const nextButton = lightbox.querySelector('[data-lb-next]');
+    const closeButton = lightbox.querySelector('[data-lb-close]');
 
-    // Click on any gallery image to open lightbox with full-res version
-    document.querySelectorAll('.editorial-image img, .horizontal-image img').forEach((img) => {
-        img.style.cursor = 'zoom-in';
-        img.addEventListener('click', (event) => {
-            event.stopPropagation();
-            // Swap thumbs/ for full_res/ to load the high-res version
-            const fullResSrc = img.src.replace('/thumbs/', '/full_res/');
-            lightboxImg.src = fullResSrc;
-            lightbox.classList.add('active');
-            lenis.stop();
+    let galleryFigures = []; // figures of the strip the open photo belongs to
+    let currentIndex = 0;
+    let zoomLevel = 1;
+    let panX = 0;
+    let panY = 0;
+
+    const pad = (n) => String(n).padStart(2, '0');
+
+    // Size the stage to the photo's own aspect ratio, fitted to the viewport
+    const fitStageToRatio = (ratio) => {
+        let width = window.innerWidth * 0.84;
+        let height = width / ratio;
+        const maxHeight = window.innerHeight * 0.82;
+        if (height > maxHeight) { height = maxHeight; width = height * ratio; }
+        stage.style.width = `${Math.round(width)}px`;
+        stage.style.height = `${Math.round(height)}px`;
+    };
+
+    // Keep the image edges from pulling inside the stage while zoomed
+    const clampPan = () => {
+        const maxPanX = (zoomLevel - 1) * stage.clientWidth / 2;
+        const maxPanY = (zoomLevel - 1) * stage.clientHeight / 2;
+        panX = Math.min(maxPanX, Math.max(-maxPanX, panX));
+        panY = Math.min(maxPanY, Math.max(-maxPanY, panY));
+    };
+
+    const applyZoom = (animate = true) => {
+        stage.classList.toggle('zoomed', zoomLevel > 1);
+        gsap.to(stageImg, {
+            scale: zoomLevel,
+            x: panX,
+            y: panY,
+            duration: animate && !prefersReducedMotion ? 0.3 : 0,
+            ease: 'power2.out',
+        });
+    };
+
+    const resetZoom = () => { zoomLevel = 1; panX = 0; panY = 0; applyZoom(false); };
+
+    const showImage = (index) => {
+        currentIndex = (index + galleryFigures.length) % galleryFigures.length;
+        const figure = galleryFigures[currentIndex];
+        const thumbImg = figure.querySelector('img');
+        // Lazy neighbours may not have loaded yet — fall back to the layout ratio
+        const fallbackRatio = figure.classList.contains('tall') ? 2 / 3 : 3 / 2;
+        const ratio = thumbImg.naturalWidth
+            ? thumbImg.naturalWidth / thumbImg.naturalHeight
+            : fallbackRatio;
+
+        resetZoom();
+        fitStageToRatio(ratio);
+
+        // Show the already-cached thumb instantly, swap in high-res when ready
+        stageImg.src = thumbImg.currentSrc || thumbImg.src;
+        const fullResSrc = (thumbImg.currentSrc || thumbImg.src).replace('/thumbs/', '/full_res/');
+        const indexAtRequest = currentIndex;
+        const loader = new Image();
+        loader.onload = () => { if (currentIndex === indexAtRequest) stageImg.src = fullResSrc; };
+        loader.src = fullResSrc;
+
+        counter.innerHTML = `<b>${pad(currentIndex + 1)}</b> / ${pad(galleryFigures.length)}`;
+    };
+
+    const openLightbox = (figures, index, clickedFigure) => {
+        galleryFigures = figures;
+        showImage(index);
+        lightbox.classList.add('active');
+        if (lenis) lenis.stop();
+
+        // Portal: the stage grows out of the clicked thumbnail's position
+        if (!prefersReducedMotion) {
+            const fromRect = clickedFigure.getBoundingClientRect();
+            const toRect = stage.getBoundingClientRect();
+            gsap.from(stage, {
+                x: (fromRect.left + fromRect.width / 2) - (toRect.left + toRect.width / 2),
+                y: (fromRect.top + fromRect.height / 2) - (toRect.top + toRect.height / 2),
+                scale: fromRect.width / toRect.width,
+                duration: 0.55,
+                ease: 'power3.out',
+            });
+        }
+    };
+
+    const closeLightbox = () => {
+        lightbox.classList.remove('active');
+        if (lenis) lenis.start();
+    };
+
+    // Every strip becomes a gallery; each figure opens at its own index
+    document.querySelectorAll('[data-strip]').forEach((strip) => {
+        const figures = Array.from(strip.querySelectorAll('figure'));
+        figures.forEach((figure, index) => {
+            figure.style.cursor = 'zoom-in';
+            figure.addEventListener('click', () => openLightbox(figures, index, figure));
         });
     });
 
-    function closeLightbox() {
-        lightbox.classList.remove('active');
-        lenis.start();
-    }
-
-    lightboxClose.addEventListener('click', closeLightbox);
+    prevButton.addEventListener('click', () => showImage(currentIndex - 1));
+    nextButton.addEventListener('click', () => showImage(currentIndex + 1));
+    closeButton.addEventListener('click', closeLightbox);
     lightbox.addEventListener('click', (event) => {
-        if (event.target === lightbox) {
-            closeLightbox();
+        if (event.target === lightbox) closeLightbox();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (!lightbox.classList.contains('active')) return;
+        if (event.key === 'Escape') closeLightbox();
+        if (event.key === 'ArrowLeft') showImage(currentIndex - 1);
+        if (event.key === 'ArrowRight') showImage(currentIndex + 1);
+    });
+
+    // --- Wheel zoom, anchored to the cursor ---
+    stage.addEventListener('wheel', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const rect = stage.getBoundingClientRect();
+        const cursorX = event.clientX - rect.left - rect.width / 2;
+        const cursorY = event.clientY - rect.top - rect.height / 2;
+        const previousZoom = zoomLevel;
+        zoomLevel = Math.min(4, Math.max(1, zoomLevel * Math.exp(-event.deltaY * 0.002)));
+        // Keep the point under the cursor stationary while zooming
+        const zoomRatio = zoomLevel / previousZoom;
+        panX = cursorX - (cursorX - panX) * zoomRatio;
+        panY = cursorY - (cursorY - panY) * zoomRatio;
+        if (zoomLevel === 1) { panX = 0; panY = 0; }
+        clampPan();
+        applyZoom();
+    }, { passive: false });
+
+    // --- Drag to pan while zoomed; plain click toggles zoom ---
+    let panPointerDown = false;
+    let panStartX = 0;
+    let panStartY = 0;
+    let panOriginX = 0;
+    let panOriginY = 0;
+    let panDistance = 0;
+
+    stage.addEventListener('pointerdown', (event) => {
+        panPointerDown = true;
+        panDistance = 0;
+        panStartX = event.clientX;
+        panStartY = event.clientY;
+        panOriginX = panX;
+        panOriginY = panY;
+        if (zoomLevel > 1) {
+            stage.classList.add('panning');
+            stage.setPointerCapture(event.pointerId);
         }
     });
-    document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && lightbox.classList.contains('active')) {
-            closeLightbox();
+    stage.addEventListener('pointermove', (event) => {
+        if (!panPointerDown || zoomLevel <= 1) return;
+        const deltaX = event.clientX - panStartX;
+        const deltaY = event.clientY - panStartY;
+        panDistance = Math.max(panDistance, Math.abs(deltaX), Math.abs(deltaY));
+        panX = panOriginX + deltaX;
+        panY = panOriginY + deltaY;
+        clampPan();
+        gsap.set(stageImg, { x: panX, y: panY });
+    });
+    const endPan = () => { panPointerDown = false; stage.classList.remove('panning'); };
+    stage.addEventListener('pointerup', endPan);
+    stage.addEventListener('pointercancel', endPan);
+
+    stage.addEventListener('click', (event) => {
+        if (panDistance > 6) return; // that was a pan, not a click
+        if (zoomLevel === 1) {
+            // Zoom in, keeping the clicked point under the cursor
+            const rect = stage.getBoundingClientRect();
+            zoomLevel = 2;
+            panX = -(event.clientX - rect.left - rect.width / 2);
+            panY = -(event.clientY - rect.top - rect.height / 2);
+            clampPan();
+        } else {
+            zoomLevel = 1;
+            panX = 0;
+            panY = 0;
         }
+        applyZoom();
     });
 }
 
-// ===== Smooth anchor links =====
-function initSmoothAnchors() {
+// ===== Anchor links via Lenis (native fallback under reduced motion) =====
+function initAnchors() {
+    if (!lenis) return;
     document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
         anchor.addEventListener('click', (event) => {
+            const target = document.getElementById(anchor.getAttribute('href').slice(1));
+            if (!target) return;
             event.preventDefault();
-            const targetId = anchor.getAttribute('href').slice(1);
-            const targetElement = document.getElementById(targetId);
-            if (targetElement) {
-                lenis.scrollTo(targetElement, { offset: 0, duration: 1.5 });
-            }
+            lenis.scrollTo(target, { duration: 1.2 });
         });
     });
 }
 
-// ===== Init everything =====
 function init() {
-    // Apply format classes first so CSS sizing is correct before layout
-    applyFormatClasses();
-
-    // Set up lazy loading before other features so the observer is ready
-    initLazyLoad();
-
-    // Init non-scroll-dependent features immediately
-    initHeroParallax();
-    initCursorTilt();
+    initHero();
+    initStrips();
+    initCollapse();
+    initReveals();
     initLightbox();
-    initSmoothAnchors();
-
-    // Wait for all images to load before setting up scroll-dependent animations
-    // This ensures ScrollTrigger has correct dimensions for all horizontal sections
-    window.addEventListener('load', () => {
-        initScrollReveals();
-        initHeadingAnimations();
-        initHorizontalScroll();
-        initImageParallax();
-
-        // Extra refresh after a short delay to catch any late layout shifts
-        setTimeout(() => ScrollTrigger.refresh(), 200);
-    });
+    initAnchors();
+    window.addEventListener('load', () => ScrollTrigger.refresh());
 }
 
-// Wait for DOM
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {
