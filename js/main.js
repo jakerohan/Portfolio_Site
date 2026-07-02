@@ -203,9 +203,9 @@ function initLightbox() {
 
     // Size the stage to the photo's own aspect ratio, fitted to the viewport
     const fitStageToRatio = (ratio) => {
-        let width = window.innerWidth * 0.84;
+        let width = window.innerWidth * 0.90;
         let height = width / ratio;
-        const maxHeight = window.innerHeight * 0.82;
+        const maxHeight = window.innerHeight * 0.90;
         if (height > maxHeight) { height = maxHeight; width = height * ratio; }
         stage.style.width = `${Math.round(width)}px`;
         stage.style.height = `${Math.round(height)}px`;
